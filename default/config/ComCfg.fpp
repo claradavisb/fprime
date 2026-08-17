@@ -40,6 +40,8 @@ module ComCfg {
         FW_PACKET_PARAM          = 0x0007  @< Parameter value type - outgoing
         FW_PACKET_HAND           = 0x00FE  @< F Prime handshake
         FW_PACKET_UNKNOWN        = 0x00FF  @< F Prime unknown packet
+        KEM_ESTABLISHMENT        = 0x0020  @< SDLS key management: ML-KEM-768 ciphertext fragment (CCSDS 355.1-B-1)
+        EP_PDU                   = 0x0021  @< SDLS key management: Extended Procedures PDU (OTAR/Activation/Verification)
         SPP_IDLE_PACKET          = 0x07FF  @< Per Space Packet Standard, all 1s (11bits) is reserved for Idle Packets
         INVALID_UNINITIALIZED    = 0x0800  @< Anything equal or higher value is invalid and should not be used
     } default INVALID_UNINITIALIZED
