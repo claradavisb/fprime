@@ -16,6 +16,7 @@ add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/DpDemo/")
 add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/BlockDriver/")
 add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/Top/")
 
+find_package(OpenSSL REQUIRED)
 register_fprime_deployment(
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/Main.cpp"

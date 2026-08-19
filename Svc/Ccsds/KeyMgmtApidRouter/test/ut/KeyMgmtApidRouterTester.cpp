@@ -4,6 +4,7 @@
 // ======================================================================
 
 #include "KeyMgmtApidRouterTester.hpp"
+#include "Fw/Types/Assert.hpp"
 
 namespace Svc {
 
@@ -15,7 +16,9 @@ namespace Ccsds {
 
 KeyMgmtApidRouterTester ::KeyMgmtApidRouterTester()
     : KeyMgmtApidRouterGTestBase("KeyMgmtApidRouterTester", KeyMgmtApidRouterTester::MAX_HISTORY_SIZE),
-      component("KeyMgmtApidRouter") {
+      component("KeyMgmtApidRouter"),
+      m_packetStorage(),
+      m_nextPacket(0) {
     this->initComponents();
     this->connectPorts();
 }
@@ -32,6 +35,8 @@ void KeyMgmtApidRouterTester ::testRouteKemEstablishment() {
     ASSERT_from_epOut_SIZE(0);
     ASSERT_from_passThroughOut_SIZE(0);
     ASSERT_from_dataReturnOut_SIZE(0);  // not returned yet (will come back on kemBufferReturnIn)
+    ASSERT_EQ(this->fromPortHistory_kemOut->at(0).context.get_apid(), ComCfg::Apid::KEM_ESTABLISHMENT);
+    ASSERT_EVENTS_SIZE(0);
 }
 
 void KeyMgmtApidRouterTester ::testRouteEpPdu() {
@@ -40,6 +45,8 @@ void KeyMgmtApidRouterTester ::testRouteEpPdu() {
     ASSERT_from_epOut_SIZE(1);
     ASSERT_from_passThroughOut_SIZE(0);
     ASSERT_from_dataReturnOut_SIZE(0);  // not returned yet (will come back on epBufferReturnIn)
+    ASSERT_EQ(this->fromPortHistory_epOut->at(0).context.get_apid(), ComCfg::Apid::EP_PDU);
+    ASSERT_EVENTS_SIZE(0);
 }
 
 void KeyMgmtApidRouterTester ::testRoutePassThrough() {
@@ -48,75 +55,85 @@ void KeyMgmtApidRouterTester ::testRoutePassThrough() {
     ASSERT_from_epOut_SIZE(0);
     ASSERT_from_passThroughOut_SIZE(1);
     ASSERT_from_dataReturnOut_SIZE(0);  // not returned yet (will come back on passThroughBufferReturnIn)
+    ASSERT_EQ(this->fromPortHistory_passThroughOut->at(0).context.get_apid(), ComCfg::Apid::FW_PACKET_COMMAND);
+    ASSERT_EVENTS_SIZE(0);
 }
 
-void KeyMgmtApidRouterTester ::testKemBufferContextRoundTrip() {
-    Fw::Buffer sent = this->mockReceiveApid(ComCfg::Apid::KEM_ESTABLISHMENT);
+void KeyMgmtApidRouterTester ::testKemBufferReturn() {
+    this->mockReceiveApid(ComCfg::Apid::KEM_ESTABLISHMENT);
     ASSERT_from_kemOut_SIZE(1);
 
-    Fw::Buffer returned = this->fromPortHistory_kemOut->at(0).data;
-    this->invoke_to_kemBufferReturnIn(0, returned);
+    Fw::Buffer buffer = this->fromPortHistory_kemOut->at(0).data;
+    ComCfg::FrameContext context = this->fromPortHistory_kemOut->at(0).context;
+    this->invoke_to_kemBufferReturnIn(0, buffer, context);
+
     ASSERT_from_dataReturnOut_SIZE(1);
     ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).context.get_apid(), ComCfg::Apid::KEM_ESTABLISHMENT);
-    ASSERT_EVENTS_SIZE(0);  // no degrade events
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).data.getData(), buffer.getData());
+    ASSERT_EVENTS_SIZE(0);
 }
 
-void KeyMgmtApidRouterTester ::testEpBufferContextRoundTrip() {
-    Fw::Buffer sent = this->mockReceiveApid(ComCfg::Apid::EP_PDU);
+void KeyMgmtApidRouterTester ::testEpBufferReturn() {
+    this->mockReceiveApid(ComCfg::Apid::EP_PDU);
     ASSERT_from_epOut_SIZE(1);
 
-    Fw::Buffer returned = this->fromPortHistory_epOut->at(0).data;
-    this->invoke_to_epBufferReturnIn(0, returned);
+    Fw::Buffer buffer = this->fromPortHistory_epOut->at(0).data;
+    ComCfg::FrameContext context = this->fromPortHistory_epOut->at(0).context;
+    this->invoke_to_epBufferReturnIn(0, buffer, context);
+
     ASSERT_from_dataReturnOut_SIZE(1);
     ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).context.get_apid(), ComCfg::Apid::EP_PDU);
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).data.getData(), buffer.getData());
     ASSERT_EVENTS_SIZE(0);
 }
 
-void KeyMgmtApidRouterTester ::testPassThroughBufferContextRoundTrip() {
-    Fw::Buffer sent = this->mockReceiveApid(ComCfg::Apid::FW_PACKET_COMMAND);
+void KeyMgmtApidRouterTester ::testPassThroughBufferReturn() {
+    this->mockReceiveApid(ComCfg::Apid::FW_PACKET_COMMAND);
     ASSERT_from_passThroughOut_SIZE(1);
 
-    Fw::Buffer returned = this->fromPortHistory_passThroughOut->at(0).data;
-    this->invoke_to_passThroughBufferReturnIn(0, returned);
+    Fw::Buffer buffer = this->fromPortHistory_passThroughOut->at(0).data;
+    ComCfg::FrameContext context = this->fromPortHistory_passThroughOut->at(0).context;
+    this->invoke_to_passThroughBufferReturnIn(0, buffer, context);
+
     ASSERT_from_dataReturnOut_SIZE(1);
     ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).context.get_apid(), ComCfg::Apid::FW_PACKET_COMMAND);
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).data.getData(), buffer.getData());
     ASSERT_EVENTS_SIZE(0);
 }
 
-void KeyMgmtApidRouterTester ::testBufferReturnNotFound() {
-    U8 data[1];
-    Fw::Buffer buffer(data, sizeof(data));
-    this->invoke_to_kemBufferReturnIn(0, buffer);
-    ASSERT_from_dataReturnOut_SIZE(1);
-    ASSERT_EVENTS_BufferContextNotFound_SIZE(1);
-    ComCfg::FrameContext defaultCtx;
-    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).context.get_apid(), defaultCtx.get_apid());
-}
+void KeyMgmtApidRouterTester ::testMultiplePacketsInFlight() {
+    this->mockReceiveApid(ComCfg::Apid::KEM_ESTABLISHMENT);
+    this->mockReceiveApid(ComCfg::Apid::EP_PDU);
+    this->mockReceiveApid(ComCfg::Apid::FW_PACKET_COMMAND);
+    ASSERT_from_kemOut_SIZE(1);
+    ASSERT_from_epOut_SIZE(1);
+    ASSERT_from_passThroughOut_SIZE(1);
+    ASSERT_from_dataReturnOut_SIZE(0);
 
-void KeyMgmtApidRouterTester ::testContextTableFull() {
-    const FwSizeType tableSize = Svc::KeyMgmtApidRouterCfg::BufferContextTableSize;
+    // Return them in a different order than they were sent: each buffer carries its own
+    // context, so the order cannot matter
+    Fw::Buffer ptBuffer = this->fromPortHistory_passThroughOut->at(0).data;
+    ComCfg::FrameContext ptContext = this->fromPortHistory_passThroughOut->at(0).context;
+    this->invoke_to_passThroughBufferReturnIn(0, ptBuffer, ptContext);
 
-    // Use a heap array of buffers so their data pointers stay distinct and alive
-    U8* blocks = new U8[(tableSize + 1) * sizeof(FwPacketDescriptorType)];
-    Fw::Buffer* buffers = new Fw::Buffer[tableSize + 1];
-    for (FwSizeType i = 0; i < tableSize + 1; i++) {
-        buffers[i] = Fw::Buffer(blocks + (i * sizeof(FwPacketDescriptorType)), sizeof(FwPacketDescriptorType));
-        ComCfg::FrameContext ctx;
-        ctx.set_apid(ComCfg::Apid::KEM_ESTABLISHMENT);
-        this->invoke_to_dataIn(0, buffers[i], ctx);
-    }
-    // Exactly one overflow event for the (tableSize+1)th send
-    ASSERT_EVENTS_BufferContextTableFull_SIZE(1);
+    Fw::Buffer kemBuffer = this->fromPortHistory_kemOut->at(0).data;
+    ComCfg::FrameContext kemContext = this->fromPortHistory_kemOut->at(0).context;
+    this->invoke_to_kemBufferReturnIn(0, kemBuffer, kemContext);
 
-    // The overflow buffer (last) returns with an empty/default context
-    this->invoke_to_kemBufferReturnIn(0, buffers[tableSize]);
-    const U8 lastReturnIdx = static_cast<U8>(this->fromPortHistory_dataReturnOut->size() - 1);
-    ComCfg::FrameContext defaultCtx;
-    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(lastReturnIdx).context.get_apid(), defaultCtx.get_apid());
-    ASSERT_EVENTS_BufferContextNotFound_SIZE(1);  // overflow buffer was never in the table
+    Fw::Buffer epBuffer = this->fromPortHistory_epOut->at(0).data;
+    ComCfg::FrameContext epContext = this->fromPortHistory_epOut->at(0).context;
+    this->invoke_to_epBufferReturnIn(0, epBuffer, epContext);
 
-    delete[] buffers;
-    delete[] blocks;
+    ASSERT_from_dataReturnOut_SIZE(3);
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).context.get_apid(), ComCfg::Apid::FW_PACKET_COMMAND);
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(1).context.get_apid(), ComCfg::Apid::KEM_ESTABLISHMENT);
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(2).context.get_apid(), ComCfg::Apid::EP_PDU);
+
+    // Each returned buffer is the one that was handed out, not a mix-up
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(0).data.getData(), ptBuffer.getData());
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(1).data.getData(), kemBuffer.getData());
+    ASSERT_EQ(this->fromPortHistory_dataReturnOut->at(2).data.getData(), epBuffer.getData());
+    ASSERT_EVENTS_SIZE(0);
 }
 
 // ----------------------------------------------------------------------
@@ -124,8 +141,10 @@ void KeyMgmtApidRouterTester ::testContextTableFull() {
 // ----------------------------------------------------------------------
 
 Fw::Buffer KeyMgmtApidRouterTester::mockReceiveApid(ComCfg::Apid::T apid) {
-    static U8 data[sizeof(FwPacketDescriptorType)];
-    Fw::Buffer buffer(data, sizeof(data));
+    FW_ASSERT(this->m_nextPacket < NUM_TEST_PACKETS, static_cast<FwAssertArgType>(this->m_nextPacket));
+    Fw::Buffer buffer(this->m_packetStorage[this->m_nextPacket], TEST_PACKET_SIZE);
+    this->m_nextPacket++;
+
     ComCfg::FrameContext context;
     context.set_apid(apid);
     this->invoke_to_dataIn(0, buffer, context);

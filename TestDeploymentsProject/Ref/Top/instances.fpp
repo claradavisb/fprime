@@ -99,6 +99,10 @@ module Ref {
 
   instance linuxTimer: Svc.LinuxTimer base id 0x10024000
 
-  instance comDriver: Drv.TcpClient base id 0x10025000
+  # UDP driver matching the YAMCS CCSDS frame links (UdpTmFrameLink listens on UDP; each TM
+  # frame must arrive as one datagram, which a TCP stream would not preserve). Send/receive
+  # endpoints are configured in RefTopology.cpp. Was Drv.TcpClient when this deployment
+  # talked to fprime-gds.
+  instance comDriver: Drv.Udp base id 0x10025000
 
 }

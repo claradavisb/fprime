@@ -17,8 +17,13 @@ module Ccsds {
         @ Port for sending the operation status and processed data (possibly newly allocated) upstream
         output port dataOut: Svc.Ccsds.CcsdsSdlsData
 
-        @ Port for receiving back ownership of buffers sent on dataOut
-        guarded input port dataReturnIn: Svc.ComDataWithContext
+        @ Port for receiving back ownership of buffers sent on dataOut.
+        @ Sync (not guarded) for the same reason as saDataIn below: the upstream framer's
+        @ handler runs synchronously inside this component's dataIn call chain (dataIn ->
+        @ saDataOut -> crypto -> saDataIn -> dataOut -> framer), and returns the buffer via
+        @ this port while dataIn still holds the component guard. Guarding it re-enters the
+        @ mutex on the same thread and trips the ERRORCHECK deadlock assert.
+        sync input port dataReturnIn: Svc.ComDataWithContext
 
         @ Port for returning the incoming iv/data buffer for deallocation
         output port bufferReturnOut: Svc.ComDataWithContext

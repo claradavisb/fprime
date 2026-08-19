@@ -17,12 +17,13 @@
 // Subtopology PingEntries includes
 #include "Svc/Subtopologies/CdhCore/PingEntries.hpp"
 #include "Svc/Subtopologies/ComCcsds/PingEntries.hpp"
+#include "Svc/Subtopologies/ComCcsdsSdls/PingEntries.hpp"
 #include "Svc/Subtopologies/DataProducts/PingEntries.hpp"
 #include "Svc/Subtopologies/FileHandling/PingEntries.hpp"
 
 // SubtopologyTopologyDefs includes
 #include "Svc/Subtopologies/CdhCore/SubtopologyTopologyDefs.hpp"
-#include "Svc/Subtopologies/ComCcsds/SubtopologyTopologyDefs.hpp"
+#include "Svc/Subtopologies/ComCcsdsSdls/SubtopologyTopologyDefs.hpp"
 #include "Svc/Subtopologies/DataProducts/SubtopologyTopologyDefs.hpp"
 #include "Svc/Subtopologies/FileHandling/SubtopologyTopologyDefs.hpp"
 // #include "Svc/Subtopologies/DpCompression/SubtopologyTopologyDefs.hpp"
@@ -79,10 +80,10 @@ namespace Ref {
  * fields, which are derived by command line inputs.
  */
 struct TopologyState {
-    const char* hostname;                         //!< Hostname for TCP communication
-    U16 port;                                     //!< Port for TCP communication
+    const char* hostname;                         //!< YAMCS host: TM datagrams are sent to hostname:port
+    U16 port;                                     //!< YAMCS TM intake port (UdpTmFrameLink), 0 selects the default
     CdhCore::SubtopologyState cdhCore;            //!< Subtopology state for CdhCore
-    ComCcsds::SubtopologyState comCcsds;          //!< Subtopology state for ComCcsds
+    ComCcsdsSdls::SubtopologyState comCcsdsSdls;  //!< Subtopology state for ComCcsdsSdls
     DataProducts::SubtopologyState dataProducts;  //!< Subtopology state for DataProducts
     FileHandling::SubtopologyState fileHandling;  //!< Subtopology state for FileHandling
     // DpCompression::SubtopologyState dpCompression;//!< Subtopology state for DpCompression

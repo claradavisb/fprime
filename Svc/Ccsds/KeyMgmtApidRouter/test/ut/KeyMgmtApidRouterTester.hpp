@@ -19,13 +19,19 @@ class KeyMgmtApidRouterTester final : public KeyMgmtApidRouterGTestBase {
     // Constants
     // ----------------------------------------------------------------------
 
-    // Maximum size of histories storing events, telemetry, and port outputs.
-    // Must exceed the buffer-context table size so the table-full test can
-    // send more buffers than the table holds without overflowing port history.
-    static const FwSizeType MAX_HISTORY_SIZE = Svc::KeyMgmtApidRouterCfg::BufferContextTableSize + 5;
+    // Maximum size of histories storing events, telemetry, and port outputs
+    static const FwSizeType MAX_HISTORY_SIZE = 10;
 
     // Instance ID supplied to the component instance under test
     static const FwEnumStoreType TEST_INSTANCE_ID = 0;
+
+    // Number of distinct packet buffers the test harness can hand to the component.
+    // Each mockReceiveApid() call consumes one, so that concurrently outstanding
+    // buffers always have distinct data pointers.
+    static const FwSizeType NUM_TEST_PACKETS = 4;
+
+    // Size of each test packet buffer
+    static const FwSizeType TEST_PACKET_SIZE = 8;
 
   public:
     // ----------------------------------------------------------------------
@@ -52,22 +58,18 @@ class KeyMgmtApidRouterTester final : public KeyMgmtApidRouterGTestBase {
     //! A packet with any other APID is forwarded on passThroughOut only
     void testRoutePassThrough();
 
-    //! A buffer returned on kemBufferReturnIn restores its saved context on dataReturnOut
-    void testKemBufferContextRoundTrip();
+    //! A buffer returned on kemBufferReturnIn is forwarded on dataReturnOut with its context
+    void testKemBufferReturn();
 
-    //! A buffer returned on epBufferReturnIn restores its saved context on dataReturnOut
-    void testEpBufferContextRoundTrip();
+    //! A buffer returned on epBufferReturnIn is forwarded on dataReturnOut with its context
+    void testEpBufferReturn();
 
-    //! A buffer returned on passThroughBufferReturnIn restores its saved context on dataReturnOut
-    void testPassThroughBufferContextRoundTrip();
+    //! A buffer returned on passThroughBufferReturnIn is forwarded on dataReturnOut with its context
+    void testPassThroughBufferReturn();
 
-    //! A buffer that was never handed off still returns, but with an empty context and a
-    //! BufferContextNotFound event
-    void testBufferReturnNotFound();
-
-    //! When the context table is full, a handed-off buffer emits the table-full event and its
-    //! context degrades to empty on return
-    void testContextTableFull();
+    //! Several packets may be outstanding at once, and each carries its own context back
+    //! regardless of the order in which they are returned
+    void testMultiplePacketsInFlight();
 
   private:
     // ----------------------------------------------------------------------
@@ -80,7 +82,8 @@ class KeyMgmtApidRouterTester final : public KeyMgmtApidRouterGTestBase {
     //! Initialize components
     void initComponents();
 
-    //! Send a minimal packet buffer with the given APID on dataIn
+    //! Send a packet buffer with the given APID on dataIn. Each call uses a distinct
+    //! backing block so that several packets can be outstanding at once.
     //! \return the buffer that was sent (the router forwards the same handle downstream)
     Fw::Buffer mockReceiveApid(ComCfg::Apid::T apid);
 
@@ -91,6 +94,12 @@ class KeyMgmtApidRouterTester final : public KeyMgmtApidRouterGTestBase {
 
     //! The component under test
     KeyMgmtApidRouter component;
+
+    //! Backing storage for test packets, one distinct block per mockReceiveApid() call
+    U8 m_packetStorage[NUM_TEST_PACKETS][TEST_PACKET_SIZE];
+
+    //! Index of the next unused block in m_packetStorage
+    FwSizeType m_nextPacket;
 };
 
 }  // namespace Ccsds

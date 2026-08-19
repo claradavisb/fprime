@@ -16,17 +16,27 @@ Everything else is forwarded unchanged on `passThroughOut`, normally connected t
 | Port | Direction | Description |
 |---|---|---|
 | `dataIn` | input, guarded | Receives deframed space packets from a packet deframer (e.g. `Svc.Ccsds.SpacePacketDeframer`) |
-| `dataReturnOut` | output | Returns ownership of buffers back to the deframer, restoring the context saved at hand-off |
-| `kemOut` | output | Forwards `KEM_ESTABLISHMENT` packets |
+| `dataReturnOut` | output | Returns ownership of buffers back to the deframer, with the context they came back with |
+| `kemOut` | output | Forwards `KEM_ESTABLISHMENT` packets. Optional — see §2.3 |
 | `kemBufferReturnIn` | input, guarded | Receives back ownership of buffers sent on `kemOut` |
-| `epOut` | output | Forwards `EP_PDU` packets |
+| `epOut` | output | Forwards `EP_PDU` packets. Optional — see §2.3 |
 | `epBufferReturnIn` | input, guarded | Receives back ownership of buffers sent on `epOut` |
-| `passThroughOut` | output | Forwards all other packets, unchanged |
+| `passThroughOut` | output | Forwards all other packets, unchanged. Required — see §2.3 |
 | `passThroughBufferReturnIn` | input, guarded | Receives back ownership of buffers sent on `passThroughOut` |
 
-### 2.2 Buffer-context tracking
+All eight ports are `Svc.ComDataWithContext`, so the `ComCfg::FrameContext` travels with the buffer in both directions.
 
-Each of the three output ports passes buffer ownership downstream; the corresponding `*BufferReturnIn` port carries no context, so the component records the outgoing `ComCfg::FrameContext` in a fixed-size table keyed by the buffer's data pointer (mirroring `Svc.FprimeRouter`'s pattern) and restores it on `dataReturnOut` when the buffer comes back. If the table is full, the buffer is still forwarded (a `BufferContextTableFull` event is raised) and its context degrades to empty on return.
+### 2.2 Buffer ownership
+
+Each of the three output ports passes buffer ownership downstream, and the corresponding `*BufferReturnIn` port carries the buffer *and* its context back. The component therefore holds no state: a return handler forwards straight to `dataReturnOut`. This is a deliberate difference from `Svc.FprimeRouter`, which keeps a buffer-to-context table because the `Svc.Router` interface it imports offers only a single buffer-only return port (`fileBufferReturnIn`) shared by `fileOut` and `unknownDataOut`. `KeyMgmtApidRouter` declares its own ports and so has no such constraint; carrying the context on the return ports removes the table, its fixed capacity, and the context-loss modes that come with them.
+
+A consequence worth stating for downstream components: because there is no table keyed on buffer identity, a downstream handler is free to advance or re-slice the buffer before returning it, so long as it returns the context it was given.
+
+### 2.3 Unconnected output ports
+
+`kemOut` and `epOut` are optional. During bring-up — before the KEM reassembler and EP PDU handler exist — a key-management packet arriving with no handler connected would otherwise assert on an unconnected output port. Instead the component raises `KeyMgmtPortNotConnected` and returns the buffer on `dataReturnOut`.
+
+`passThroughOut` carries all normal uplink traffic and is **not** guarded: as with `Svc.FprimeRouter`'s `commandOut`, leaving it unconnected is a topology error and should fail loudly.
 
 ## 3. Requirements
 
@@ -35,5 +45,6 @@ Each of the three output ports passes buffer ownership downstream; the correspon
 | KEYMGMTAPIDROUTER-001 | Packets with APID `KEM_ESTABLISHMENT` shall be forwarded on `kemOut` only. | Unit Test |
 | KEYMGMTAPIDROUTER-002 | Packets with APID `EP_PDU` shall be forwarded on `epOut` only. | Unit Test |
 | KEYMGMTAPIDROUTER-003 | Packets with any other APID shall be forwarded on `passThroughOut` only. | Unit Test |
-| KEYMGMTAPIDROUTER-004 | The context associated with a buffer handed off on `kemOut`/`epOut`/`passThroughOut` shall be restored on `dataReturnOut` when the same buffer returns on the corresponding `*BufferReturnIn` port. | Unit Test |
-| KEYMGMTAPIDROUTER-005 | A buffer returned without a matching table entry shall still be returned, with an empty context and a `BufferContextNotFound` event. | Unit Test |
+| KEYMGMTAPIDROUTER-004 | A packet forwarded on any output port shall carry the context it was received with. | Unit Test |
+| KEYMGMTAPIDROUTER-005 | A buffer returned on any `*BufferReturnIn` port shall be forwarded on `dataReturnOut` with the context it was returned with, independent of how many buffers are outstanding or the order in which they return. | Unit Test |
+| KEYMGMTAPIDROUTER-006 | A key-management packet whose output port is unconnected shall be returned on `dataReturnOut` and shall raise `KeyMgmtPortNotConnected`. | Inspection |

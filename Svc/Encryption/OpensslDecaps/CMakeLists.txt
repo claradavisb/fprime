@@ -14,6 +14,7 @@
 # root when not specifically overridden by the developer, i.e. the module defined by
 # `MyProj/Some/Path/CMakeLists.txt` will be named `MyProj_Some_Path`.
 find_package(OpenSSL REQUIRED)
+find_package(liboqs REQUIRED)
 register_fprime_library(
     AUTOCODER_INPUTS
         "${CMAKE_CURRENT_LIST_DIR}/OpensslDecaps.fpp"
@@ -21,6 +22,7 @@ register_fprime_library(
         "${CMAKE_CURRENT_LIST_DIR}/OpensslDecaps.cpp"
    DEPENDS
        OpenSSL::Crypto
+       OQS::oqs
 )
 
 ### Unit Tests ###
@@ -33,5 +35,6 @@ register_fprime_ut(
     DEPENDS
         STest # For rules-based testing
         OpenSSL::Crypto
+        OQS::oqs
     UT_AUTO_HELPERS
 )

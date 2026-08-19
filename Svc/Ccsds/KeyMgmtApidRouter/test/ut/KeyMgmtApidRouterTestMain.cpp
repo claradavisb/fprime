@@ -17,25 +17,21 @@ TEST(KeyMgmtApidRouter, TestRoutePassThrough) {
     Svc::Ccsds::KeyMgmtApidRouterTester tester;
     tester.testRoutePassThrough();
 }
-TEST(KeyMgmtApidRouter, TestKemBufferContextRoundTrip) {
+TEST(KeyMgmtApidRouter, TestKemBufferReturn) {
     Svc::Ccsds::KeyMgmtApidRouterTester tester;
-    tester.testKemBufferContextRoundTrip();
+    tester.testKemBufferReturn();
 }
-TEST(KeyMgmtApidRouter, TestEpBufferContextRoundTrip) {
+TEST(KeyMgmtApidRouter, TestEpBufferReturn) {
     Svc::Ccsds::KeyMgmtApidRouterTester tester;
-    tester.testEpBufferContextRoundTrip();
+    tester.testEpBufferReturn();
 }
-TEST(KeyMgmtApidRouter, TestPassThroughBufferContextRoundTrip) {
+TEST(KeyMgmtApidRouter, TestPassThroughBufferReturn) {
     Svc::Ccsds::KeyMgmtApidRouterTester tester;
-    tester.testPassThroughBufferContextRoundTrip();
+    tester.testPassThroughBufferReturn();
 }
-TEST(KeyMgmtApidRouter, TestBufferReturnNotFound) {
+TEST(KeyMgmtApidRouter, TestMultiplePacketsInFlight) {
     Svc::Ccsds::KeyMgmtApidRouterTester tester;
-    tester.testBufferReturnNotFound();
-}
-TEST(KeyMgmtApidRouter, TestContextTableFull) {
-    Svc::Ccsds::KeyMgmtApidRouterTester tester;
-    tester.testContextTableFull();
+    tester.testMultiplePacketsInFlight();
 }
 
 int main(int argc, char** argv) {

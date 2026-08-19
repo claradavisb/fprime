@@ -4,7 +4,6 @@
 // ======================================================================
 
 #include "Svc/Ccsds/KeyMgmtApidRouter/KeyMgmtApidRouter.hpp"
-#include "Fw/FPrimeBasicTypes.hpp"
 
 namespace Svc {
 
@@ -14,12 +13,7 @@ namespace Ccsds {
 // Component construction and destruction
 // ----------------------------------------------------------------------
 
-KeyMgmtApidRouter ::KeyMgmtApidRouter(const char* const compName) : KeyMgmtApidRouterComponentBase(compName) {
-    // Mark every table entry unused
-    for (FwSizeType i = 0; i < FW_NUM_ARRAY_ELEMENTS(this->m_bufferContextTable); i++) {
-        this->m_bufferContextTable[i].state = Fw::Active::INACTIVE;
-    }
-}
+KeyMgmtApidRouter ::KeyMgmtApidRouter(const char* const compName) : KeyMgmtApidRouterComponentBase(compName) {}
 
 KeyMgmtApidRouter ::~KeyMgmtApidRouter() {}
 
@@ -30,87 +24,59 @@ KeyMgmtApidRouter ::~KeyMgmtApidRouter() {}
 void KeyMgmtApidRouter ::dataIn_handler(FwIndexType portNum,
                                         Fw::Buffer& packetBuffer,
                                         const ComCfg::FrameContext& context) {
-    ComCfg::Apid::T apid = context.get_apid();
+    const ComCfg::Apid::T apid = context.get_apid();
 
     switch (apid) {
+        // The two key-management ports are optional: during bring-up the KEM reassembler and
+        // EP PDU handler may not exist yet. Returning the buffer is preferable to asserting
+        // on an unconnected output port, which would take the FSW down on the first uplinked
+        // key-management packet.
         case ComCfg::Apid::KEM_ESTABLISHMENT: {
-            if (this->insertContext(packetBuffer, context) == Fw::Success::FAILURE) {
-                this->log_WARNING_HI_BufferContextTableFull();
+            if (this->isConnected_kemOut_OutputPort(0)) {
+                this->kemOut_out(0, packetBuffer, context);
+            } else {
+                this->log_WARNING_HI_KeyMgmtPortNotConnected(apid);
+                this->dataReturnOut_out(0, packetBuffer, context);
             }
-            this->kemOut_out(0, packetBuffer, context);
             break;
         }
         case ComCfg::Apid::EP_PDU: {
-            if (this->insertContext(packetBuffer, context) == Fw::Success::FAILURE) {
-                this->log_WARNING_HI_BufferContextTableFull();
+            if (this->isConnected_epOut_OutputPort(0)) {
+                this->epOut_out(0, packetBuffer, context);
+            } else {
+                this->log_WARNING_HI_KeyMgmtPortNotConnected(apid);
+                this->dataReturnOut_out(0, packetBuffer, context);
             }
-            this->epOut_out(0, packetBuffer, context);
             break;
         }
+        // The pass-through path carries all normal uplink traffic. Like Svc.FprimeRouter's
+        // commandOut, it is considered an error for it to be unconnected, so it is not guarded.
         default: {
-            if (this->insertContext(packetBuffer, context) == Fw::Success::FAILURE) {
-                this->log_WARNING_HI_BufferContextTableFull();
-            }
             this->passThroughOut_out(0, packetBuffer, context);
             break;
         }
     }
 }
 
-void KeyMgmtApidRouter ::kemBufferReturnIn_handler(FwIndexType portNum, Fw::Buffer& fwBuffer) {
-    this->handleBufferReturn(fwBuffer);
+// The three return ports carry the frame context back alongside the buffer, so ownership is
+// simply forwarded upstream. No buffer-to-context bookkeeping is needed.
+
+void KeyMgmtApidRouter ::kemBufferReturnIn_handler(FwIndexType portNum,
+                                                   Fw::Buffer& data,
+                                                   const ComCfg::FrameContext& context) {
+    this->dataReturnOut_out(0, data, context);
 }
 
-void KeyMgmtApidRouter ::epBufferReturnIn_handler(FwIndexType portNum, Fw::Buffer& fwBuffer) {
-    this->handleBufferReturn(fwBuffer);
+void KeyMgmtApidRouter ::epBufferReturnIn_handler(FwIndexType portNum,
+                                                  Fw::Buffer& data,
+                                                  const ComCfg::FrameContext& context) {
+    this->dataReturnOut_out(0, data, context);
 }
 
-void KeyMgmtApidRouter ::passThroughBufferReturnIn_handler(FwIndexType portNum, Fw::Buffer& fwBuffer) {
-    this->handleBufferReturn(fwBuffer);
-}
-
-// ----------------------------------------------------------------------
-// Private helper methods
-// ----------------------------------------------------------------------
-
-void KeyMgmtApidRouter ::handleBufferReturn(Fw::Buffer& fwBuffer) {
-    ComCfg::FrameContext context;
-    if (this->takeContext(fwBuffer, context) == Fw::Success::FAILURE) {
-        // Buffer not found in the table: return with an empty context (already default)
-        this->log_WARNING_HI_BufferContextNotFound();
-    }
-    this->dataReturnOut_out(0, fwBuffer, context);
-}
-
-// ----------------------------------------------------------------------
-// Buffer-to-context association table helpers
-// ----------------------------------------------------------------------
-
-Fw::Success KeyMgmtApidRouter ::insertContext(const Fw::Buffer& buffer, const ComCfg::FrameContext& context) {
-    const U8* key = buffer.getData();
-    for (FwSizeType i = 0; i < FW_NUM_ARRAY_ELEMENTS(this->m_bufferContextTable); i++) {
-        if (this->m_bufferContextTable[i].state == Fw::Active::INACTIVE) {
-            this->m_bufferContextTable[i].state = Fw::Active::ACTIVE;
-            this->m_bufferContextTable[i].key = key;
-            this->m_bufferContextTable[i].context = context;
-            return Fw::Success::SUCCESS;
-        }
-    }
-    // Table full
-    return Fw::Success::FAILURE;
-}
-
-Fw::Success KeyMgmtApidRouter ::takeContext(const Fw::Buffer& buffer, ComCfg::FrameContext& context) {
-    const U8* key = buffer.getData();
-    for (FwSizeType i = 0; i < FW_NUM_ARRAY_ELEMENTS(this->m_bufferContextTable); i++) {
-        if (this->m_bufferContextTable[i].state == Fw::Active::ACTIVE && this->m_bufferContextTable[i].key == key) {
-            context = this->m_bufferContextTable[i].context;
-            this->m_bufferContextTable[i].state = Fw::Active::INACTIVE;
-            return Fw::Success::SUCCESS;
-        }
-    }
-    // Not found
-    return Fw::Success::FAILURE;
+void KeyMgmtApidRouter ::passThroughBufferReturnIn_handler(FwIndexType portNum,
+                                                           Fw::Buffer& data,
+                                                           const ComCfg::FrameContext& context) {
+    this->dataReturnOut_out(0, data, context);
 }
 
 }  // namespace Ccsds

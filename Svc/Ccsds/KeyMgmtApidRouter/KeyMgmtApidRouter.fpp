@@ -19,33 +19,30 @@ module Ccsds {
         output port kemOut: Svc.ComDataWithContext
 
         @ Port for receiving back ownership of buffers sent on kemOut
-        guarded input port kemBufferReturnIn: Fw.BufferSend
+        guarded input port kemBufferReturnIn: Svc.ComDataWithContext
 
         @ Port for forwarding Extended Procedures PDU packets (ComCfg.Apid.EP_PDU)
         output port epOut: Svc.ComDataWithContext
 
         @ Port for receiving back ownership of buffers sent on epOut
-        guarded input port epBufferReturnIn: Fw.BufferSend
+        guarded input port epBufferReturnIn: Svc.ComDataWithContext
 
-        @ Port for forwarding all other packets, unchanged, to the standard router
+        @ Port for forwarding all other packets, unchanged, to the standard router.
+        @ This port carries all normal uplink traffic and is required: like
+        @ Svc.FprimeRouter's commandOut, leaving it unconnected is a topology error.
         output port passThroughOut: Svc.ComDataWithContext
 
         @ Port for receiving back ownership of buffers sent on passThroughOut
-        guarded input port passThroughBufferReturnIn: Fw.BufferSend
+        guarded input port passThroughBufferReturnIn: Svc.ComDataWithContext
 
-        @ The buffer-to-context table was full when a buffer was handed off.
-        @ The buffer is still forwarded, but its context cannot be restored on
-        @ return and will be returned empty.
-        event BufferContextTableFull() \
+        @ A key-management packet arrived but its output port is not connected,
+        @ which is expected during bring-up before the KEM reassembler and EP PDU
+        @ handler exist. The packet is returned undelivered rather than dropped.
+        event KeyMgmtPortNotConnected(
+                apid: ComCfg.Apid @< The APID whose handler is not connected
+            ) \
             severity warning high \
-            format "Buffer-to-context table full in KeyMgmtApidRouter; context will be lost for this buffer"
-
-        @ A buffer returned on one of the *BufferReturnIn ports was not found
-        @ in the buffer-to-context table. The buffer is still returned, but
-        @ with an empty context.
-        event BufferContextNotFound() \
-            severity warning high \
-            format "Returned buffer not found in context table; returning with empty context"
+            format "No handler connected for key-management APID {}; packet returned undelivered"
 
         ###############################################################################
         # Standard AC Ports: Required for Channels, Events, Commands, and Parameters  #

@@ -13,8 +13,12 @@ module Ccsds {
         @ Port for sending the operation status and encrypted data (possibly newly allocated) downstream
         output port encryptOut: Svc.Ccsds.CcsdsSdlsData
 
-        @ Port for receiving back ownership of buffers sent on encryptOut
-        guarded input port encryptReturnIn: Svc.ComDataWithContext
+        @ Port for receiving back ownership of buffers sent on encryptOut.
+        @ Sync (not guarded): in the synchronous SDLS pipeline the buffer sent on encryptOut
+        @ is returned here while encryptIn is still on the stack, i.e. while this component's
+        @ guard is already held by the same thread. Guarding this port re-enters the mutex
+        @ and trips the ERRORCHECK deadlock assert (Os/Mutex.cpp).
+        sync input port encryptReturnIn: Svc.ComDataWithContext
 
         @ Port for returning the incoming iv/data buffer for deallocation
         output port bufferReturnOut: Svc.ComDataWithContext
